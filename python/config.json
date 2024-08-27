@@ -1,0 +1,17 @@
+{
+  "SQLitePath": "./database.db",
+  "PostgreSQL": {
+    "Enabled": false,
+		"Host" : "localhost",
+		"Port" : 5432,
+		"Database" : "python_bot_maket",
+		"Username" : "python_bot_maket",
+		"Password" : "python_bot_maket"
+  },
+  "TelegramBot" : {
+    "Enabled": true,
+    "Apikey" : "",
+    "BotName" : ""
+  },
+  "AvaliableLanguages": ["en", "ru"]
+}
