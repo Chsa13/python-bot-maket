@@ -1,0 +1,6 @@
+{
+    "Welcome": "Привет, {0.first_name}!\nДобро пожаловать.", 
+    "Welcome again": "Вы уже подписаны. Добро пожаловать снова",
+    "Subscribe to channel" : "Подпишись на канал <a href='https://t.me/stark_invest'>STARK_INVEST</a>",
+    "Subscribe success": "Подписка на уведомления прошла успешно"
+}

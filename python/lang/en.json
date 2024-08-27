@@ -1,0 +1,6 @@
+{
+    "Welcome": "Hey, {0.first_name}!\nWelcome ",
+    "Welcome again": "You are already subscribed. Welcome again",
+    "Subscribe to channel" : "Subscribe to channel <a href='https://t.me/stark_invest'>STARK_INVEST</a>",
+    "Subscribe success": "The notification subscription was successful"
+}
