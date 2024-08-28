@@ -170,7 +170,7 @@ def Start():
       user = getUser(message.from_user.id)
       if user and user["role"] == "admin": # проверяем является ли он админом
         #отправляем логи
-        bot.send_message(bot, message.chat.id, Toolbox.GetLogs())
+        bot.send_message(message.chat.id, str(Toolbox.GetLogs()))
         
     #обработчик команды /users
     #Отправялет в чат список всех пользователей, сохранённых в БД
