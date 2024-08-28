@@ -45,8 +45,8 @@ def getUser(user_id = 0, chat_id=0):
 def IsSubscriber(bot, user_id):
   #Функция позволяет проверить подписку конкертного пользователя на канал
   #Работает только если бот является адиином канала
-  #Здесь канала @stark_invest, можно заменить на любой другой, а лучше вынести это в config
-  try : status = bot.get_chat_member("@stark_invest", user_id).status
+  conf = Toolbox.GetConfiguration()
+  try : status = bot.get_chat_member(conf.get("Channel", {}).get("Name", ""), user_id).status
   except: status = False
   if status == "member" or status == "administrator" or status == "creator" or status == "restricted": subscriber =  True
   else: subscriber = False
@@ -57,10 +57,11 @@ def IsSubscriber(bot, user_id):
 def AreSubscribers(users):
   #Функция проверяет каждого пользователя из массива users на наличие подписки на канал
   #Возвращает обновлённый массив users с изменённым значением subscriber
+  conf = Toolbox.GetConfiguration()
   import telebot
   bot = telebot.TeleBot(token=TELEGRAM_TOKEN, exception_handler=TelegramExceptionHandler())
   for i in users:
-    try : status = bot.get_chat_member("@stark_invest", i["user_id"]).status
+    try : status = bot.get_chat_member(conf.get("Channel", {}).get("Name", ""), i["user_id"]).status
     except: status = False
     if status == "member" or status == "administrator" or status == "creator" or status == "restricted": subscriber =  True
     else: subscriber = False
@@ -68,6 +69,36 @@ def AreSubscribers(users):
     Toolbox.LogWarning(str(subscriber))
   bot.stop_bot()
   return users
+
+#Функция для сохранения или обновления данных о пользователе
+#Можно запускать при каждом сообщении от пользователя
+def SaveUser(message, bot):
+  #получаем необходимую инфу о пользователе, чтобы потом её сохранить в базу данных
+  user = {
+    "chat_id": message.chat.id,
+    "user_id": message.from_user.id,
+    "first_name": message.from_user.first_name,
+    "last_name": message.from_user.last_name,
+    "username": message.from_user.username,
+    "language_code": message.from_user.language_code,
+    "is_bot": 1 if message.from_user.is_bot else 0,
+    "is_premium": 1 if message.from_user.is_premium else 0,
+    "subscriber": 1 if IsSubscriber(bot, message.from_user.id) else 0
+  }
+  
+  with Database.open() as db: #Пытаемся найте пользователя в базе данных, который отправл команду
+    u = db.select("users", "*", condition="user_id=%s", params=[message.from_user.id])
+  if len(u):
+    #если нашли, то обновляем информация о нём
+    with Database.open() as db:
+      db.update("users", user, condition="user_id=%s", params=[user['user_id']])
+  else:
+    #если не нашли то довабляем пользователю уникальный идентификатор и время присоединения к боту
+    user['id']= str(uuid.uuid4())
+    user["joined_at"] = int(time.time())
+    #сохраняем в базу данных нового пользвателя
+    with Database.open() as db:
+      db.insert("users", user)
 
 def Start():
   #запускается бот
@@ -84,32 +115,8 @@ def Start():
     @bot.message_handler(commands=['start'])
     def send_welcome(message):
       try:
-        #получаем необходимую инфу о пользователе, чтобы потом её сохранить в базу данных
-        user = {
-          "chat_id": message.chat.id,
-          "user_id": message.from_user.id,
-          "first_name": message.from_user.first_name,
-          "last_name": message.from_user.last_name,
-          "username": message.from_user.username,
-          "language_code": message.from_user.language_code,
-          "is_bot": 1 if message.from_user.is_bot else 0,
-          "is_premium": 1 if message.from_user.is_premium else 0,
-          "subscriber": 1 if IsSubscriber(bot, message.from_user.id) else 0
-        }
-        
-        with Database.open() as db: #Пытаемся найте пользователя в базе данных, который отправл команду
-          u = db.select("users", "*", condition="user_id=%s", params=[message.from_user.id])
-        if len(u):
-          #если нашли, то обновляем информация о нём
-          with Database.open() as db:
-            db.update("users", user, condition="user_id=%s", params=[user['user_id']])
-        else:
-          #если не нашли то довабляем пользователю уникальный идентификатор и время присоединения к боту
-          user['id']= str(uuid.uuid4())
-          user["joined_at"] = int(time.time())
-          #сохраняем в базу данных нового пользвателя
-          with Database.open() as db:
-            db.insert("users", user)
+        #Сохраняем пользователя в БД
+        SaveUser(message, bot)
         #отправляем сообщение
         Messages.Welcome(bot, message)
       except Exception as e:
@@ -157,16 +164,42 @@ def Start():
     @bot.message_handler(commands=['log'])
     #пользователю отправляются 5 последних записей в логах
     def send_log(message):
+      #Сохраняем пользователя в БД
+      SaveUser(message, bot)
       #получаем пользователя из базы данных
       user = getUser(message.from_user.id)
       if user and user["role"] == "admin": # проверяем является ли он админом
         #отправляем логи
         bot.send_message(bot, message.chat.id, Toolbox.GetLogs())
-    
+        
+    #обработчик команды /users
+    #Отправялет в чат список всех пользователей, сохранённых в БД
+    @bot.message_handler(commands=['users'])
+    def send_test(message):
+      #Сохраняем пользователя в БД
+      SaveUser(message, bot)
+      #Проверка на то является ли пользователь админом
+      if getUser(chat_id=message.chat.id)["role"] != "admin":
+        return
+      with Database.open() as db:
+        o = db.select("users", "*")
+      p = 0
+      for i in o:
+        i["id"] = p
+        p +=1
+      users = json.dumps(o, indent=4, sort_keys=True, ensure_ascii=False,)
+      n = 4000
+      y = []
+      y = [users[i:i+n] for i in range(0, len(users), n)]
+      for i in y:
+        bot.send_message(message.chat.id, str(i))
+        
     #обработчик команды /profile
     @bot.message_handler(commands=['profile'])
     #просто макет 
     def send_log(message):
+      #Сохраняем пользователя в БД
+      SaveUser(message, bot)
       markup = types.InlineKeyboardMarkup()
       button1 = types.InlineKeyboardButton("Сайт Хабр", callback_data="start")
       markup.add(button1)
